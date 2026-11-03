@@ -44,3 +44,4 @@ internal fun RecyclerView.setOnItemDoubleTapListener(
         detector.onTouchEvent(event)
         false
     }
+}

@@ -12,6 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.mmgpt.shoplistgpt"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -60,4 +61,11 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.2.3")
     implementation(libs.androidx.ui.graphics.android)
     implementation(libs.androidx.foundation.android)
+
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit-ktx:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("junit:junit:4.13.2")
 }
