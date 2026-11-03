@@ -12,18 +12,17 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mmgpt.shoplistgpt.adapter.ItemAdapter
 import com.mmgpt.shoplistgpt.databinding.FragmentCategoryBinding
-import com.mmgpt.shoplistgpt.ShoppingItem
 
 class PlanCategoryFragment : Fragment() {
 
     private val viewModel: ShoppingListViewModel by activityViewModels()
-    private var index: Int = 0
+    private var categoryId: Long = 0L
     private var _binding: FragmentCategoryBinding? = null
     private val binding get() = _binding!!
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        index = arguments?.getInt(ARG_INDEX) ?: 0
+        categoryId = arguments?.getLong(ARG_CATEGORY_ID) ?: 0L
     }
 
     override fun onCreateView(
@@ -37,28 +36,46 @@ class PlanCategoryFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.chkSelectAll.visibility = View.VISIBLE
+
         lateinit var adapter: ItemAdapter
         val dragHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN,
+            0
         ) {
             override fun onMove(
                 recyclerView: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder,
                 target: RecyclerView.ViewHolder
             ): Boolean {
-                val from = viewHolder.adapterPosition
-                val to = target.adapterPosition
+                val from = viewHolder.bindingAdapterPosition
+                val to = target.bindingAdapterPosition
+                if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) {
+                    return false
+                }
+
                 val itemFrom = adapter.currentList.getOrNull(from)
                 val itemTo = adapter.currentList.getOrNull(to)
-                if (itemFrom?.isPlaceholder == true || itemTo?.isPlaceholder == true) return false
-                viewModel.reorderItem(index, from - 1, to - 1)
+                if (itemFrom?.isPlaceholder == true || itemTo?.isPlaceholder == true) {
+                    return false
+                }
+
+                val currentIndex = viewModel.categories.value
+                    .orEmpty()
+                    .indexOfFirst { it.id == categoryId }
+                if (currentIndex < 0) return false
+
+                viewModel.reorderItem(currentIndex, from - 1, to - 1)
                 adapter.moveItem(from, to)
                 return true
             }
 
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            override fun onSwiped(
+                viewHolder: RecyclerView.ViewHolder,
+                direction: Int
+            ) = Unit
 
             override fun isLongPressDragEnabled(): Boolean = false
         })
@@ -69,42 +86,62 @@ class PlanCategoryFragment : Fragment() {
                     ItemAdapter.Action.CHECK -> viewModel.checkItem(item)
                     ItemAdapter.Action.EDIT -> showEditDialog(item)
                     ItemAdapter.Action.DELETE -> viewModel.deleteItem(item)
-                    else -> {}
+                    else -> Unit
                 }
             },
             mode = ItemAdapter.Mode.PLAN,
-            dragStart = { vh -> dragHelper.startDrag(vh) },
+            dragStart = { viewHolder -> dragHelper.startDrag(viewHolder) },
             onAdd = { position, name ->
-                viewModel.addItem(index, position - 1, name)
+                val currentIndex = viewModel.categories.value
+                    .orEmpty()
+                    .indexOfFirst { it.id == categoryId }
+
+                if (currentIndex >= 0) {
+                    viewModel.addItem(currentIndex, position - 1, name)
+                }
             }
         )
+
         binding.recyclerView.adapter = adapter
         dragHelper.attachToRecyclerView(binding.recyclerView)
 
-        viewModel.categories.observe(viewLifecycleOwner) { list ->
-            val cat = list.getOrNull(index)
-            if (cat != null) {
-                binding.tvHeading.text = cat.heading
-                binding.tvCount.text = ""
+        viewModel.categories.observe(viewLifecycleOwner) { categories ->
+            val categoryIndex = categories.indexOfFirst { it.id == categoryId }
+            val category = categories.getOrNull(categoryIndex)
+                ?: return@observe
 
-                val allChecked = cat.items.filterNot { it.isHeading }.all { it.isChecked }
-                binding.chkSelectAll.setOnCheckedChangeListener(null)
-                binding.chkSelectAll.isChecked = allChecked
-                binding.chkSelectAll.setOnCheckedChangeListener { _, isChecked ->
-                    viewModel.setAllChecked(index, isChecked)
+            binding.tvHeading.text = category.heading
+            binding.tvCount.text = ""
+
+            val allChecked = category.items
+                .filterNot { it.isHeading }
+                .all { it.isChecked }
+
+            binding.chkSelectAll.setOnCheckedChangeListener(null)
+            binding.chkSelectAll.isChecked = allChecked
+            binding.chkSelectAll.setOnCheckedChangeListener { _, isChecked ->
+                val currentIndex = viewModel.categories.value
+                    .orEmpty()
+                    .indexOfFirst { it.id == categoryId }
+
+                if (currentIndex >= 0) {
+                    viewModel.setAllChecked(currentIndex, isChecked)
                 }
-
-                val items = mutableListOf<ShoppingItem>()
-                items.add(ShoppingItem(-1, "", isPlaceholder = true))
-                items.addAll(cat.items)
-                items.add(ShoppingItem(-2, "", isPlaceholder = true))
-                adapter.submitList(items)
             }
+
+            val items = mutableListOf<ShoppingItem>()
+            items.add(ShoppingItem(-1, "", isPlaceholder = true))
+            items.addAll(category.items)
+            items.add(ShoppingItem(-2, "", isPlaceholder = true))
+            adapter.submitList(items)
         }
     }
 
     private fun showEditDialog(item: ShoppingItem) {
-        val input = android.widget.EditText(requireContext()).apply { setText(item.name) }
+        val input = android.widget.EditText(requireContext()).apply {
+            setText(item.name)
+        }
+
         AlertDialog.Builder(requireContext())
             .setTitle(getString(R.string.edit))
             .setView(input)
@@ -124,11 +161,14 @@ class PlanCategoryFragment : Fragment() {
     }
 
     companion object {
-        private const val ARG_INDEX = "index"
-        fun newInstance(index: Int): PlanCategoryFragment {
-            val fragment = PlanCategoryFragment()
-            fragment.arguments = Bundle().apply { putInt(ARG_INDEX, index) }
-            return fragment
+        private const val ARG_CATEGORY_ID = "category_id"
+
+        fun newInstance(categoryId: Long): PlanCategoryFragment {
+            return PlanCategoryFragment().apply {
+                arguments = Bundle().apply {
+                    putLong(ARG_CATEGORY_ID, categoryId)
+                }
+            }
         }
     }
 }
