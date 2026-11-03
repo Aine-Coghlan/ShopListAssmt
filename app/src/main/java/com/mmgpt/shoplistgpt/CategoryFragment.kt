@@ -13,13 +13,14 @@ import com.mmgpt.shoplistgpt.databinding.FragmentCategoryBinding
 class CategoryFragment : Fragment() {
 
     private val viewModel: ShoppingListViewModel by activityViewModels()
-    private var index: Int = 0
+    //private var index: Int = 0
+    private var categoryId: Long = 0L
     private var _binding: FragmentCategoryBinding? = null
     private val binding get() = _binding!!
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        index = arguments?.getInt(ARG_INDEX) ?: 0
+        categoryId = arguments?.getLong(ARG_CATEGORY_ID) ?: return
     }
 
     override fun onCreateView(
@@ -45,7 +46,7 @@ class CategoryFragment : Fragment() {
         binding.recyclerView.adapter = adapter
 
         viewModel.categories.observe(viewLifecycleOwner) { list ->
-            val cat = list.getOrNull(index)
+            val cat = list.firstOrNull { it.id == categoryId }
             if (cat != null) {
                 binding.tvHeading.text = cat.heading
                 binding.tvCount.text = "${cat.remainingCount}/${cat.totalCount}"
@@ -60,11 +61,14 @@ class CategoryFragment : Fragment() {
     }
 
     companion object {
-        private const val ARG_INDEX = "index"
-        fun newInstance(index: Int): CategoryFragment {
-            val fragment = CategoryFragment()
-            fragment.arguments = Bundle().apply { putInt(ARG_INDEX, index) }
-            return fragment
+        private const val ARG_CATEGORY_ID = "category_id"
+
+        fun newInstance(categoryId: Long): CategoryFragment {
+            return CategoryFragment().apply {
+                arguments = Bundle().apply {
+                    putLong(ARG_CATEGORY_ID, categoryId)
+                }
+            }
         }
     }
 }
